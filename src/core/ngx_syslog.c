@@ -79,7 +79,6 @@ ngx_syslog_process_conf(ngx_conf_t *cf, ngx_syslog_peer_t *peer)
 
     peer->conn.read = &ngx_syslog_dummy_event;
     peer->conn.write = &ngx_syslog_dummy_event;
-    peer->is_rfc5424 = 0;
 
     ngx_syslog_dummy_event.log = &ngx_syslog_dummy_log;
 
@@ -266,10 +265,10 @@ ngx_syslog_add_header_rfc5424(ngx_syslog_peer_t *peer, u_char *buf)
     pri = peer->facility * 8 + peer->severity;
 
     if (peer->nohostname) {
-        return ngx_sprintf(buf, "<%ui>1 %V %V - nginx %d - - ", pri, &ngx_cached_syslog_rfc5424_time, ngx_log_pid);
+        return ngx_sprintf(buf, "<%ui>1 %V - nginx %d - - ", pri, &ngx_cached_syslog_rfc5424_time, ngx_log_pid);
     }
 
-    return ngx_sprintf(buf, "<%ui>1 %V %V %V nginx %d - - ", pri, &ngx_cached_syslog_rfc5424_time, peer->hostname, ngx_log_pid);
+    return ngx_sprintf(buf, "<%ui>1 %V %V nginx %d - - ", pri, &ngx_cached_syslog_rfc5424_time, peer->hostname, ngx_log_pid);
 }
 
 void
