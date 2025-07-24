@@ -1,68 +1,68 @@
 import json
 import os
 
-with open("semgrep_report/semgrep.json") as f:
-    data = json.load(f)
+def map_severity(finding):
+    # Use severity if present
+    severity = finding.get("extra", {}).get("severity", "")
+    if severity:
+        return severity
 
-results = data.get("results", [])
-count = len(results)
+    # Fallback: Infer severity from rule ID or message
+    rule_id = finding.get("check_id", "").lower()
+    message = finding.get("extra", {}).get("message", "").lower()
 
-html = f"""
-<!DOCTYPE html>
-<html lang='en'>
-<head>
-    <meta charset='UTF-8'>
-    <title>Semgrep Security Report</title>
-    <link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' rel='stylesheet'>
-    <style>
-        body {{ padding: 2rem; }}
-        .high {{ background-color: #f8d7da; }}
-        .medium {{ background-color: #fff3cd; }}
-        .low {{ background-color: #d1ecf1; }}
-        .info {{ background-color: #e2e3e5; }}
-        .card {{ margin-bottom: 1rem; }}
-        pre {{ background: #f8f9fa; padding: 0.5rem; }}
-    </style>
-</head>
-<body>
-    <h1 class='mb-4'>🔍 Semgrep Security Report</h1>
-    <p><strong>Total Findings:</strong> {count}</p>
-    <div class='accordion' id='resultsAccordion'>
-"""
+    if "xss" in message or "injection" in message:
+        return "High"
+    elif "plaintext" in message or "http" in message:
+        return "Medium"
+    elif "info" in message or "style" in message:
+        return "Low"
+    else:
+        return "Unknown"
 
-for i, result in enumerate(results):
-    severity = result.get("extra", {}).get("severity", "info").lower()
-    check_id = result.get("check_id", "N/A")
-    message = result.get("extra", {}).get("message", "N/A")
-    path = result.get("path", "N/A")
-    start_line = result.get("start", {}).get("line", "N/A")
+def severity_color(sev):
+    return {
+        "Critical": "🟣",
+        "High": "🔴",
+        "Medium": "🟠",
+        "Low": "🟢",
+        "Unknown": "⚪"
+    }.get(sev, "⚪")
 
-    html += f"""
-    <div class='card {severity}'>
-        <div class='card-header' id='heading{i}'>
-            <h2 class='mb-0'>
-                <button class='btn btn-link text-dark' type='button' data-bs-toggle='collapse' data-bs-target='#collapse{i}' aria-expanded='true' aria-controls='collapse{i}'>
-                    [{severity.upper()}] {check_id} - {os.path.basename(path)}:{start_line}
-                </button>
-            </h2>
-        </div>
-        <div id='collapse{i}' class='collapse' aria-labelledby='heading{i}' data-bs-parent='#resultsAccordion'>
-            <div class='card-body'>
-                <p><strong>Message:</strong> {message}</p>
-                <p><strong>File:</strong> {path}</p>
-                <p><strong>Line:</strong> {start_line}</p>
-            </div>
-        </div>
-    </div>
-    """
+def main():
+    input_file = "semgrep_report/semgrep.json"
+    output_file = "semgrep_report/semgrep-report.html"
 
-html += """
-    </div>
-    <script src='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js'></script>
-</body>
-</html>
-"""
+    with open(input_file, "r") as f:
+        data = json.load(f)
 
-os.makedirs("semgrep_report", exist_ok=True)
-with open("semgrep_report/semgrep-report.html", "w") as f:
-    f.write(html)
+    findings = data.get("results", [])
+    total = len(findings)
+
+    by_severity = {}
+    for f in findings:
+        sev = map_severity(f)
+        by_severity.setdefault(sev, []).append(f)
+
+    with open(output_file, "w") as f:
+        f.write(f"<html><head><title>Semgrep Security Report</title></head><body>")
+        f.write(f"<h2>🔍 Semgrep Security Report</h2>")
+        f.write(f"<p>Total Findings: {total}</p><hr>")
+
+        for sev in sorted(by_severity.keys(), reverse=True):
+            color = severity_color(sev)
+            count = len(by_severity[sev])
+            f.write(f"<h3>{color} {sev} ({count})</h3><ul>")
+            for finding in by_severity[sev]:
+                eid = finding.get("check_id", "Unknown")
+                msg = finding.get("extra", {}).get("message", "")
+                path = finding.get("path", "")
+                line = finding.get("start", {}).get("line", "")
+                f.write(f"<li><b>[{eid}]</b> - {msg}<br>")
+                f.write(f"<i>File:</i> {path} : <i>Line:</i> {line}</li><br><br>")
+            f.write("</ul><hr>")
+
+        f.write("</body></html>")
+
+if __name__ == "__main__":
+    main()
